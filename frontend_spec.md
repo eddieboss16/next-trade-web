@@ -3,7 +3,7 @@
 **Repo:** `next-trade-web` (new, third repo — separate from `next-trade-engine` and `next-trade-api`)
 **Scope:** the actual clickable product. Everything built so far (Weeks 1–3) is invisible without this — nothing has a UI yet.
 
-## Stack — decided, do not re-litigate
+## Stac54k — decided, do not re-litigate
 
 - **Vite + React + TypeScript.** No Next.js — this is a client-only SPA, no SSR need.
 - **`lightweight-charts`** for the candlestick chart — matches the original architecture decision.
