@@ -37,6 +37,18 @@ export interface Credentials {
   password: string
 }
 
+/**
+ * Sign-up payload. `password_confirmation` is Laravel's standard `confirmed`-rule
+ * convention and is sent under that exact snake_case name — the API validates the
+ * pair, the client never compares them itself.
+ */
+export interface RegisterDetails {
+  name: string
+  email: string
+  password: string
+  password_confirmation: string
+}
+
 /** A non-2xx response from the API, carrying the status for callers to switch on. */
 export class ApiError extends Error {
   readonly status: number
@@ -181,6 +193,41 @@ export async function login(credentials: Credentials): Promise<User> {
   const user = await fetchCurrentUser()
   if (!user) {
     throw new ApiError(500, body, 'Login succeeded but no user session was returned.')
+  }
+  return user
+}
+
+/**
+ * Registers a new user. The API answers **201** (not login's 200), creates the
+ * linked trading account, and establishes the session on the same guard login
+ * uses — so the end state here is identical to a successful login, and the
+ * returned user already carries `account_id`.
+ *
+ * The CSRF prime is part of this function for the same reason it is part of
+ * `login()`: it is a precondition of the POST, not a step a caller could forget.
+ */
+export async function register(details: RegisterDetails): Promise<User> {
+  await primeCsrfCookie()
+
+  const body = await apiJson<User | { user?: User } | null>('/api/register', {
+    method: 'POST',
+    body: JSON.stringify(details),
+  })
+
+  if (body && typeof body === 'object' && 'email' in body) return body as User
+  if (body && typeof body === 'object' && 'user' in body && body.user) {
+    return body.user
+  }
+
+  // Unrecognised envelope — the session exists regardless, so read it back
+  // rather than failing a registration that actually succeeded.
+  const user = await fetchCurrentUser()
+  if (!user) {
+    throw new ApiError(
+      500,
+      body,
+      'Registration succeeded but no user session was returned.',
+    )
   }
   return user
 }

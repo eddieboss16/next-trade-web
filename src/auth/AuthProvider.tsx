@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as api from '../lib/api'
-import type { Credentials, User } from '../lib/api'
+import type { Credentials, RegisterDetails, User } from '../lib/api'
 import { AuthContext, type AuthStatus } from './context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,6 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return loggedIn
   }, [])
 
+  // Registration ends authenticated: the API establishes the session itself, so
+  // there is no follow-up login round-trip to make.
+  const register = useCallback(async (details: RegisterDetails) => {
+    const registered = await api.register(details)
+    setUser(registered)
+    setStatus('authenticated')
+    return registered
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await api.logout()
@@ -50,8 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ status, user, login, logout }),
-    [status, user, login, logout],
+    () => ({ status, user, login, register, logout }),
+    [status, user, login, register, logout],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>

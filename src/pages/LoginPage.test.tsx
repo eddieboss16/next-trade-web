@@ -137,6 +137,30 @@ describe('login screen', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('links to the sign-up screen for a new user', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = new URL(String(input)).pathname
+      switch (url) {
+        case '/api/user':
+          return json({ message: 'Unauthenticated.' }, 401)
+        // Instruments load from the provider stack on mount, on every route.
+        case '/api/instruments':
+          return json(API_INSTRUMENTS, 200)
+        default:
+          throw new Error(`Unexpected request: ${url}`)
+      }
+    })
+
+    renderAt('/login')
+    await screen.findByRole('heading', { name: /sign in/i })
+
+    await userEvent.click(screen.getByRole('link', { name: /register/i }))
+
+    expect(
+      await screen.findByRole('heading', { name: /create account/i }),
+    ).toBeInTheDocument()
+  })
+
   it('returns the user to login after signing out', async () => {
     let session = true
     fetchMock.mockImplementation(async (input) => {

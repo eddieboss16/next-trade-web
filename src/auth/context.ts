@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Credentials, User } from '../lib/api'
+import type { Credentials, RegisterDetails, User } from '../lib/api'
 
 /**
  * `checking` is a real state, not a detail: on a full page load we don't know
@@ -12,6 +12,8 @@ export interface AuthContextValue {
   status: AuthStatus
   user: User | null
   login: (credentials: Credentials) => Promise<User>
+  /** Sign-up. Lands in the same `authenticated` state as `login`. */
+  register: (details: RegisterDetails) => Promise<User>
   logout: () => Promise<void>
 }
 

@@ -47,6 +47,47 @@ anything auth-related. Every request goes through `apiRequest()`, which sets
 `X-XSRF-TOKEN` header. A test asserts `localStorage.setItem` is never called
 during login.
 
+## Registration ends authenticated, and its 422 carries three stories
+
+`POST /api/register` answers **201** — not login's 200 — creates the linked
+trading account at the schema-default starting balance, and establishes the
+session on the same guard login uses. So `register()` in
+[src/lib/api.ts](src/lib/api.ts) needs no follow-up login round-trip: the user it
+returns already carries `account_id`, and `AuthProvider` goes straight to
+`authenticated`. Like `login()`, it primes the CSRF cookie itself
+(unconditionally, before the POST) rather than leaving it to the caller.
+
+The API rate-limits registration **by IP alone**, deliberately unlike login's
+email+IP: sign-up spam varies the email every attempt, so keying on it would let
+an attacker sidestep the limit entirely.
+
+That limit surfaces as a `422` on the `email` field — the *same field* a
+duplicate email uses. So `422` here carries three different outcomes separated
+only by the body, and `describeRegisterFailure` in
+[src/pages/RegisterPage.tsx](src/pages/RegisterPage.tsx) discriminates them:
+
+| Body | Outcome | Treatment |
+|---|---|---|
+| `errors.email` matches `/already been taken/i` | duplicate email | own copy **+ a "Sign in instead" link** |
+| `errors.email` matches `/too many/i` | IP rate limit | the API's own message, with its countdown |
+| any other `errors` | ordinary validation | first field message |
+
+Matched on a distinctive **substring**, never the exact string — upstream
+rewording degrades to the generic validation message rather than silently
+mislabelling one case as the other. A duplicate email is not a "try again"
+failure, which is why it is the one case that gets an escape route rather than a
+red box; a test asserts the other two do *not* render that link, so "distinct"
+is pinned rather than assumed.
+
+### Known gap: no password reset
+
+There is **no self-service password recovery** — out of scope for v1 per
+[registration_spec.md](registration_spec.md), recorded here rather than papered
+over. A demo user who forgets their password needs manual intervention
+(`DemoUserSeeder` re-run, or a `tinker` reset). Do not build a partial
+forgot-password flow to close this; it needs its own spec (mail transport, signed
+token expiry, rate limiting).
+
 ## Prices are integers; the chart needs a scale to render them
 
 The engine is integers-only end to end (`feed/types.ts`): `"150.25"` at

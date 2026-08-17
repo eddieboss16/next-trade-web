@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { API_BASE_URL, ApiError, login, logout } from './api'
+import { API_BASE_URL, ApiError, login, logout, register } from './api'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -129,6 +129,96 @@ describe('login (spec §1 required test: CSRF priming)', () => {
     })
 
     await login({ email: 'trader@example.com', password: 'secret' })
+
+    expect(setItem).not.toHaveBeenCalled()
+    setItem.mockRestore()
+  })
+})
+
+describe('register', () => {
+  const DETAILS = {
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    password: 'password123',
+    password_confirmation: 'password123',
+  }
+
+  it('primes the CSRF cookie before POSTing the sign-up, same as login', async () => {
+    const requested: string[] = []
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+      requested.push(url)
+
+      if (url.endsWith('/sanctum/csrf-cookie')) {
+        document.cookie = 'XSRF-TOKEN=csrf-token-value'
+        return new Response(null, { status: 204 })
+      }
+      // The API answers 201 (not login's 200) with the user, account_id included.
+      return json({ ...DETAILS, id: 7, account_id: 'acct-new' }, 201)
+    })
+
+    const user = await register(DETAILS)
+
+    expect(user.email).toBe('ada@example.com')
+    expect(user.account_id).toBe('acct-new')
+    expect(requested).toEqual([
+      `${API_BASE_URL}/sanctum/csrf-cookie`,
+      `${API_BASE_URL}/api/register`,
+    ])
+  })
+
+  it('sends the confirmation field under Laravel’s snake_case name', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).endsWith('/sanctum/csrf-cookie')) {
+        document.cookie = 'XSRF-TOKEN=csrf-token-value'
+        return new Response(null, { status: 204 })
+      }
+      return json({ ...DETAILS, id: 7, account_id: 'acct-new' }, 201)
+    })
+
+    await register(DETAILS)
+
+    const body = JSON.parse(String(fetchMock.mock.calls[1][1]?.body))
+    expect(body.password_confirmation).toBe('password123')
+    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-XSRF-TOKEN')).toBe(
+      'csrf-token-value',
+    )
+  })
+
+  it('surfaces a duplicate email as a 422 for the UI to discriminate on', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).endsWith('/sanctum/csrf-cookie')) {
+        document.cookie = 'XSRF-TOKEN=csrf-token-value'
+        return new Response(null, { status: 204 })
+      }
+      return json(
+        {
+          message: 'The email has already been taken.',
+          errors: { email: ['The email has already been taken.'] },
+        },
+        422,
+      )
+    })
+
+    const error = await register(DETAILS).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(422)
+  })
+
+  it('never writes auth state to localStorage', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).endsWith('/sanctum/csrf-cookie')) {
+        document.cookie = 'XSRF-TOKEN=csrf-token-value'
+        return new Response(null, { status: 204 })
+      }
+      return json({ ...DETAILS, id: 7, account_id: 'acct-new' }, 201)
+    })
+
+    await register(DETAILS)
 
     expect(setItem).not.toHaveBeenCalled()
     setItem.mockRestore()

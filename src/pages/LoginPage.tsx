@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 import { ApiError, validationErrors } from '../lib/api'
 
@@ -107,6 +107,13 @@ export function LoginPage() {
         >
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
+
+        <p className="mt-4 text-center text-sm text-slate-400">
+          New here?{' '}
+          <Link to="/register" className="text-slate-200 underline">
+            Register
+          </Link>
+        </p>
       </form>
     </main>
   )
